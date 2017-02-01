@@ -1,28 +1,31 @@
+## Read Checksum from last run and compare with current checksum to check if conf file is updated
 ruby_block 'get_checksum' do
 	block do
 		if File.exist?("#{node.default[:checksum_file]}")
-			cached_checksum = IO.read("#{node.default[:checksum_file]}")
+			cached_checksum = IO.read("#{node.default[:checksum_file]}") ## Read Checksum from last run cached file
 			puts "CURRENT CHECKSUM::: #{cached_checksum}"	
 		end
   	  	require 'digest'
-    		checksum = Digest::SHA1.file("#{node.default[:conf_file]}").hexdigest
+    		checksum = Digest::SHA1.file("#{node.default[:conf_file]}").hexdigest  ## get New checksum on conf file
 	    	node.default['checksum'] = "#{checksum}"
     		puts "CHECKSUM ::: #{node.default[:checksum]}"
 	    	file_r = run_context.resource_collection.find(:file => "checksum")
     		file_r.content node.default[:checksum]
 		resources(:ruby_block => 'fix_file').run_action(:run)
-    		if cached_checksum != node.default[:checksum]
+    		if cached_checksum != node.default[:checksum]  ## If conf file modified, check if params modified
 			puts "Conf file is updated, checksum #{node.default[:checksum]} does not match #{checksum}"
 			resources(:ruby_block => 'fix_file').run_action(:run)
 		end	 
   	end
 end
 
+## update cached file with new checksum
 file 'checksum' do
         path "#{node.default[:checksum_file]}"
         content  node.default[:checksum]
 end
 
+## Loop through params and verify if values different from attributes/default.rb and update them 
 ruby_block 'fix_file' do
 	block do
 		params_updated = []
@@ -43,6 +46,8 @@ ruby_block 'fix_file' do
 	action :nothing
 end
 
+
+## Handler to Send Email on parameters updated
 Chef.event_handler do
 	on :run_completed do
 	   if Chef.run_context.node.default.modified == true
